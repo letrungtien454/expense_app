@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'add_expense_screen.dart';
 import 'report_screen.dart';
+import 'transaction_screen.dart';
+import 'budget_screen.dart';
+import 'account_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,8 +17,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // FIX: chỉ giữ selectedIndex ở đây vì nó ảnh hưởng đến layout ngoài
   int selectedIndex = 0;
+
+  final navTitles = ['Tổng quan', 'Sổ giao dịch', 'Ngân sách', 'Tài khoản'];
 
   void _onBottomNavTap(int index) {
     setState(() {
@@ -36,9 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (authSnapshot.hasError) {
           return Scaffold(
-            body: Center(
-              child: Text('Lỗi xác thực: ${authSnapshot.error}'),
-            ),
+            body: Center(child: Text('Lỗi xác thực: ${authSnapshot.error}')),
           );
         }
 
@@ -52,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return Scaffold(
           backgroundColor: const Color(0xFFF4F7FB),
           appBar: AppBar(
-            title: const Text("Dashboard"),
+            title: Text(navTitles[selectedIndex]),
             backgroundColor: Colors.green,
             elevation: 0,
           ),
@@ -73,25 +75,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              // FIX: không truyền showBalance / showWeeklyTop xuống nữa
-              // HomeScreenContent tự quản lý state của mình
-              return HomeScreenContent(
-                snapshot: snapshot,
-                user: user,
-                selectedIndex: selectedIndex,
-                onBottomNavTap: _onBottomNavTap,
+              return IndexedStack(
+                index: selectedIndex,
+                children: [
+                  HomeScreenContent(
+                    snapshot: snapshot,
+                    user: user,
+                  ),
+                  TransactionScreen(user: user),
+                  BudgetScreen(user: user),
+                  AccountScreen(user: user),
+                ],
               );
             },
           ),
-          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerDocked,
           floatingActionButton: FloatingActionButton(
             backgroundColor: Colors.green,
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => AddExpenseScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => AddExpenseScreen()),
               );
             },
             child: const Icon(Icons.add),
@@ -106,8 +111,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   _bottomBarItem(0, Icons.dashboard, "Tổng quan"),
                   _bottomBarItem(1, Icons.list_alt, "Sổ giao dịch"),
                   const SizedBox(width: 56),
-                  _bottomBarItem(3, Icons.pie_chart, "Ngân sách"),
-                  _bottomBarItem(4, Icons.account_circle, "Tài khoản"),
+                  _bottomBarItem(2, Icons.pie_chart, "Ngân sách"),
+                  _bottomBarItem(3, Icons.account_circle, "Tài khoản"),
                 ],
               ),
             ),
@@ -127,14 +132,19 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
-                  size: 22,
-                  color: selected ? Colors.green : Colors.grey.shade600),
+              Icon(
+                icon,
+                size: 22,
+                color: selected ? Colors.green : Colors.grey.shade600,
+              ),
               const SizedBox(height: 4),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: selected ? Colors.green : Colors.grey.shade600)),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: selected ? Colors.green : Colors.grey.shade600,
+                ),
+              ),
             ],
           ),
         ),
@@ -143,21 +153,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// FIX: Đổi từ StatelessWidget → StatefulWidget
-// showBalance và showWeeklyTop giờ là state nội bộ của widget này
-// Khi toggle, chỉ rebuild HomeScreenContent, KHÔNG động đến StreamBuilder bên ngoài
 class HomeScreenContent extends StatefulWidget {
   final AsyncSnapshot<QuerySnapshot> snapshot;
   final User user;
-  final int selectedIndex;
-  final Function(int) onBottomNavTap;
 
   const HomeScreenContent({
     super.key,
     required this.snapshot,
     required this.user,
-    required this.selectedIndex,
-    required this.onBottomNavTap,
   });
 
   @override
@@ -165,7 +168,6 @@ class HomeScreenContent extends StatefulWidget {
 }
 
 class _HomeScreenContentState extends State<HomeScreenContent> {
-  // FIX: state được quản lý nội bộ, tách biệt với HomeScreen
   bool showBalance = true;
   bool showWeeklyTop = true;
 
@@ -193,9 +195,14 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             const SizedBox(height: 12),
             Text(title, style: TextStyle(color: color.withOpacity(0.9))),
             const SizedBox(height: 8),
-            Text(value,
-                style: TextStyle(
-                    color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
           ],
         ),
       ),
@@ -224,11 +231,11 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
 
     final dailyIncome = {
       for (var date in currentMonthDays)
-        DateFormat('yyyy-MM-dd').format(date): 0.0
+        DateFormat('yyyy-MM-dd').format(date): 0.0,
     };
     final dailyExpense = {
       for (var date in currentMonthDays)
-        DateFormat('yyyy-MM-dd').format(date): 0.0
+        DateFormat('yyyy-MM-dd').format(date): 0.0,
     };
 
     for (var doc in docs) {
@@ -252,9 +259,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           if (dailyExpense.containsKey(dayKey)) {
             dailyExpense[dayKey] = dailyExpense[dayKey]! + money;
           }
-        }
-
-        if (type == "expense") {
           monthExpenses.add({
             "note": data["note"] ?? "",
             "amount": money,
@@ -280,9 +284,11 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     }
 
     weekExpenses.sort(
-        (a, b) => (b["amount"] as double).compareTo(a["amount"] as double));
+      (a, b) => (b["amount"] as double).compareTo(a["amount"] as double),
+    );
     monthExpenses.sort(
-        (a, b) => (b["amount"] as double).compareTo(a["amount"] as double));
+      (a, b) => (b["amount"] as double).compareTo(a["amount"] as double),
+    );
 
     final topWeek = weekExpenses.take(3).toList();
     final topMonth = monthExpenses.take(3).toList();
@@ -322,8 +328,10 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Xin chào!",
-                  style: TextStyle(color: Colors.white70, fontSize: 14)),
+              const Text(
+                "Xin chào!",
+                style: TextStyle(color: Colors.white70, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               Text(
                 widget.user.email ?? "Người dùng",
@@ -341,9 +349,10 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("Số dư tài khoản",
-                            style: TextStyle(
-                                color: Colors.white70, fontSize: 14)),
+                        const Text(
+                          "Số dư tài khoản",
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           showBalance
@@ -359,7 +368,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     ),
                   ),
                   InkWell(
-                    // FIX: setState chỉ rebuild HomeScreenContent, không đụng StreamBuilder
                     onTap: () => setState(() => showBalance = !showBalance),
                     child: CircleAvatar(
                       radius: 22,
@@ -369,7 +377,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                         color: Colors.white,
                       ),
                     ),
-                  )
+                  ),
                 ],
               ),
             ],
@@ -378,35 +386,52 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         const SizedBox(height: 18),
         Row(
           children: [
-            summaryCard("Thu tháng", formatMoney(monthIncome),
-                Icons.arrow_upward, Colors.green),
+            summaryCard(
+              "Thu tháng",
+              formatMoney(monthIncome),
+              Icons.arrow_upward,
+              Colors.green,
+            ),
             const SizedBox(width: 12),
-            summaryCard("Chi tháng", formatMoney(monthExpense),
-                Icons.arrow_downward, Colors.red),
+            summaryCard(
+              "Chi tháng",
+              formatMoney(monthExpense),
+              Icons.arrow_downward,
+              Colors.red,
+            ),
           ],
         ),
         const SizedBox(height: 18),
         Card(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           elevation: 2,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 18),
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 6,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Biểu đồ thu chi",
-                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Text(
+                        "Biểu đồ thu chi",
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       Row(
                         children: [
                           Container(
                             width: 8,
                             height: 8,
                             decoration: const BoxDecoration(
-                                color: Colors.green, shape: BoxShape.circle),
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                           const SizedBox(width: 6),
                           const Text("Thu"),
@@ -415,7 +440,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                             width: 8,
                             height: 8,
                             decoration: const BoxDecoration(
-                                color: Colors.red, shape: BoxShape.circle),
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                           const SizedBox(width: 6),
                           const Text("Chi"),
@@ -429,7 +456,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                           );
                         },
                         child: const Text("Xem chi tiết"),
-                      )
+                      ),
                     ],
                   ),
                 ),
@@ -445,30 +472,37 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                             tooltipBgColor: Colors.black87,
                             getTooltipItems: (spots) {
                               return spots.map((spot) {
-                                final label = spot.barIndex == 0 ? "Thu" : "Chi";
+                                final label =
+                                    spot.barIndex == 0 ? "Thu" : "Chi";
                                 final index = spot.x.toInt() - 1;
-                                final day = index >= 0 && index < currentMonthDays.length
+                                final day = index >= 0 &&
+                                        index < currentMonthDays.length
                                     ? currentMonthDays[index]
                                     : null;
                                 return LineTooltipItem(
                                   "$label\n${day != null ? DateFormat('dd/MM').format(day) : ''}\n${formatMoney(spot.y)}",
-                                  const TextStyle(color: Colors.white, fontSize: 12),
+                                  const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                  ),
                                 );
                               }).toList();
                             },
                           ),
                         ),
                         gridData: FlGridData(
-                            show: true,
-                            horizontalInterval: yInterval,
-                            drawVerticalLine: false,
-                            getDrawingHorizontalLine: (value) => FlLine(
-                                  color: Colors.grey.withOpacity(0.2),
-                                  strokeWidth: 1,
-                                )),
+                          show: true,
+                          horizontalInterval: yInterval,
+                          drawVerticalLine: false,
+                          getDrawingHorizontalLine: (value) => FlLine(
+                            color: Colors.grey.withOpacity(0.2),
+                            strokeWidth: 1,
+                          ),
+                        ),
                         borderData: FlBorderData(
-                            show: true,
-                            border: Border.all(color: Colors.grey.shade300)),
+                          show: true,
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
                         titlesData: FlTitlesData(
                           leftTitles: AxisTitles(
                             sideTitles: SideTitles(
@@ -478,7 +512,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                               getTitlesWidget: (value, meta) {
                                 if (value < 0) return const SizedBox();
                                 return Text(
-                                  NumberFormat.compact(locale: 'vi_VN').format(value),
+                                  NumberFormat.compact(locale: 'vi_VN')
+                                      .format(value),
                                   style: const TextStyle(fontSize: 10),
                                 );
                               },
@@ -491,10 +526,12 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                               reservedSize: 24,
                               getTitlesWidget: (value, meta) {
                                 final index = value.toInt() - 1;
-                                if (index < 0 || index >= currentMonthDays.length) {
+                                if (index < 0 ||
+                                    index >= currentMonthDays.length) {
                                   return const SizedBox();
                                 }
-                                if (currentMonthDays.length > 16 && index % 2 == 1) {
+                                if (currentMonthDays.length > 16 &&
+                                    index % 2 == 1) {
                                   return const SizedBox();
                                 }
                                 return Text(
@@ -514,8 +551,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                             isCurved: true,
                             dotData: FlDotData(show: true),
                             belowBarData: BarAreaData(
-                                show: true,
-                                color: Colors.green.withOpacity(0.15)),
+                              show: true,
+                              color: Colors.green.withOpacity(0.15),
+                            ),
                             barWidth: 3,
                           ),
                           LineChartBarData(
@@ -524,8 +562,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                             isCurved: true,
                             dotData: FlDotData(show: true),
                             belowBarData: BarAreaData(
-                                show: true,
-                                color: Colors.red.withOpacity(0.15)),
+                              show: true,
+                              color: Colors.red.withOpacity(0.15),
+                            ),
                             barWidth: 3,
                           ),
                         ],
@@ -548,7 +587,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 color: Colors.black.withOpacity(0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
-              )
+              ),
             ],
           ),
           child: Column(
@@ -557,24 +596,31 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Chi tiêu nhiều nhất",
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text(
+                    "Chi tiêu nhiều nhất",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                   ToggleButtons(
                     borderRadius: BorderRadius.circular(12),
                     selectedColor: Colors.white,
                     fillColor: Colors.green,
                     color: Colors.grey.shade700,
                     isSelected: [showWeeklyTop, !showWeeklyTop],
-                    // FIX: setState chỉ rebuild HomeScreenContent, không đụng StreamBuilder
                     onPressed: (index) =>
-                        setState(() => showWeeklyTop = !showWeeklyTop),
+                        setState(() => showWeeklyTop = index == 0),
                     children: const [
                       Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         child: Text("Tuần"),
                       ),
                       Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         child: Text("Tháng"),
                       ),
                     ],
@@ -596,8 +642,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 Column(
                   children: topData.map((item) {
                     final amount = item["amount"] as double;
-                    final percent =
-                        activeTotal > 0 ? amount / activeTotal * 100 : 0.0;
+                    final percent = activeTotal > 0
+                        ? amount / activeTotal * 100
+                        : 0.0;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
@@ -617,7 +664,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                 Text(
                                   formatDate(item["date"] as DateTime),
                                   style: TextStyle(
-                                      color: Colors.grey.shade600, fontSize: 12),
+                                    color: Colors.grey.shade600,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
@@ -638,8 +687,10 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Giao dịch gần đây",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text(
+              "Giao dịch gần đây",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
             TextButton(
               onPressed: () {
                 Navigator.push(
@@ -648,7 +699,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 );
               },
               child: const Text("Xem tất cả"),
-            )
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -660,7 +711,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           final time = (data["time"] as Timestamp?)?.toDate();
           return Card(
             margin: const EdgeInsets.only(bottom: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: type == "income"
@@ -671,9 +724,11 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                   color: type == "income" ? Colors.green : Colors.red,
                 ),
               ),
-              title: Text(note.isEmpty
-                  ? (type == "income" ? "Thu nhập" : "Chi tiêu")
-                  : note),
+              title: Text(
+                note.isEmpty
+                    ? (type == "income" ? "Thu nhập" : "Chi tiêu")
+                    : note,
+              ),
               subtitle: Text(
                 time != null ? formatDate(time) : "",
                 style: const TextStyle(fontSize: 12),
